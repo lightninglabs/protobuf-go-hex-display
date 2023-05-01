@@ -6,6 +6,7 @@ package protojson
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 
 	"google.golang.org/protobuf/internal/encoding/json"
@@ -99,6 +100,10 @@ type MarshalOptions struct {
 	// EmitUnpopulated takes precedence over EmitDefaultValues since the former generates
 	// a strict superset of the latter.
 	EmitDefaultValues bool
+
+	// If UseHexForBytes is set, bytes fields are marshaled as hex strings
+	// instead of base64.
+	UseHexForBytes bool
 
 	// Resolver is used for looking up types when expanding google.protobuf.Any
 	// messages. If nil, this defaults to using protoregistry.GlobalTypes.
@@ -320,7 +325,13 @@ func (e encoder) marshalSingular(val protoreflect.Value, fd protoreflect.FieldDe
 		e.WriteFloat(val.Float(), 64)
 
 	case protoreflect.BytesKind:
-		e.WriteString(base64.StdEncoding.EncodeToString(val.Bytes()))
+		var encoded string
+		if e.opts.UseHexForBytes {
+			encoded = hex.EncodeToString(val.Bytes())
+		} else {
+			encoded = base64.StdEncoding.EncodeToString(val.Bytes())
+		}
+		e.WriteString(encoded)
 
 	case protoreflect.EnumKind:
 		if fd.Enum().FullName() == genid.NullValue_enum_fullname {
