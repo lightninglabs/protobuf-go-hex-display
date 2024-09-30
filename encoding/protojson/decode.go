@@ -6,6 +6,7 @@ package protojson
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"strconv"
@@ -40,6 +41,10 @@ type UnmarshalOptions struct {
 
 	// If DiscardUnknown is set, unknown fields and enum name values are ignored.
 	DiscardUnknown bool
+
+	// If UseHexForBytes is set, bytes fields are un-marshaled as hex
+	// strings instead of base64.
+	UseHexForBytes bool
 
 	// Resolver is used for looking up types when unmarshaling
 	// google.protobuf.Any messages or extension fields.
@@ -338,8 +343,14 @@ func (d decoder) unmarshalScalar(fd protoreflect.FieldDescriptor) (protoreflect.
 		}
 
 	case protoreflect.BytesKind:
-		if v, ok := unmarshalBytes(tok); ok {
-			return v, nil
+		if d.opts.UseHexForBytes {
+			if v, ok := unmarshalBytesFromHex(tok); ok {
+				return v, nil
+			}
+		} else {
+			if v, ok := unmarshalBytes(tok); ok {
+				return v, nil
+			}
 		}
 
 	case protoreflect.EnumKind:
@@ -482,6 +493,19 @@ func unmarshalBytes(tok json.Token) (protoreflect.Value, bool) {
 		enc = enc.WithPadding(base64.NoPadding)
 	}
 	b, err := enc.DecodeString(s)
+	if err != nil {
+		return protoreflect.Value{}, false
+	}
+	return protoreflect.ValueOfBytes(b), true
+}
+
+func unmarshalBytesFromHex(tok json.Token) (protoreflect.Value, bool) {
+	if tok.Kind() != json.String {
+		return protoreflect.Value{}, false
+	}
+
+	s := tok.ParsedString()
+	b, err := hex.DecodeString(s)
 	if err != nil {
 		return protoreflect.Value{}, false
 	}
